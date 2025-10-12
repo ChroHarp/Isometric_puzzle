@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>三視圖推理遊戲（九宮格立方體）</title>
+<style>
+  :root { --bg:#f9fafb; --panel:#ffffff; --text:#0f172a; --accent:#2563eb; --good:#16a34a; }
+  *{box-sizing:border-box;}
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Noto Sans TC",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; }
+  header { width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:var(--panel); box-shadow:0 2px 5px rgba(0,0,0,.08); position:sticky; top:0; z-index:10; }
+  header h1 { margin:0; font-size:1.2rem; font-weight:800; letter-spacing:.02em; }
+  .top-controls { display:flex; gap:10px; align-items:center; }
+  select { font-size:1rem; padding:6px 10px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
+  #scoreText, #timerText { font-size:1.4rem; font-weight:800; color:var(--accent); }
+
+  main { flex:1; display:grid; grid-template-columns:280px 640px; grid-template-rows:auto auto; gap:0; align-items:start; justify-content:center; padding:10px 0 18px; }
+
+  .input-area { display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:-6px; }
+  .inputGrid { display:grid; grid-template-columns:repeat(3,60px); gap:4px; }
+  .inputCell { width:60px; height:60px; background:#e2e8f0; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; cursor:pointer; transition:transform .08s, background .2s; user-select:none; }
+  .inputCell:hover { background:#cbd5e1; transform:translateY(-1px); }
+  .dot { width:12px; height:12px; background:#a0a; border-radius:50%; margin-top:10px; }
+  .hint-btn { margin-top:24px; padding:10px 18px; font-size:1rem; font-weight:700; border-radius:10px; background:#e2e8f0; border:1px solid #94a3b8; cursor:pointer; }
+  .hint-btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .stage { position:relative; width:640px; height:460px; display:flex; justify-content:center; align-items:center; }
+  canvas { background:#f1f5f9; border:1px solid #cbd5e1; border-radius:14px; width:600px; height:440px; }
+  /* 只移動黑點，不改變立體方塊 */
+  .stage .dot { position:absolute; left:260px; bottom:60px; }
+
+  .bottom { grid-column:1 / span 2; display:flex; align-items:flex-start; justify-content:center; gap:30px; margin-top:14px; }
+  .ctrl { display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
+  .ctrl button { background:#2563eb; color:#fff; border:none; border-radius:10px; padding:12px 24px; font-size:1.2rem; font-weight:800; cursor:pointer; }
+  .ctrl strong { font-size:1.6rem; color:var(--accent); }
+  #message{ min-height:24px; font-weight:700; }
+
+  .views { display:flex; gap:18px; width:600px; justify-content:space-between; }
+  .viewBox { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .viewBox>div:first-child{ font-weight:800; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,40px); grid-template-rows:repeat(3,40px); gap:2px; }
+  .cell { background:#f8fafc; border:1px solid #cbd5e1; width:40px; height:40px; border-radius:6px; }
+  /* 顏色：上紅、前（左下）藍、右（右下）黃 */
+  .topFill { background:#ef4444; }
+  .frontFill { background:#3b82f6; }
+  .rightFill { background:#facc15; }
+
+  #finalScore { position:fixed; inset:0; background:rgba(255,255,255,0.96); display:flex; flex-direction:column; align-items:center; justify-content:center; visibility:hidden; }
+  #finalScore.visible { visibility:visible; }
+  #scoreDisplay { font-size:3rem; font-weight:900; color:var(--accent); margin-bottom:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>三視圖推理遊戲 · 九宮格立方體</h1>
+  <div class="top-controls">
+    <label for="difficulty">難度：</label>
+    <select id="difficulty">
+      <option value="easy">簡單</option>
+      <option value="normal" selected>普通</option>
+      <option value="hard">困難</option>
+      <option value="hell">地獄</option>
+    </select>
+    <button id="startBtn">開始</button>
+    <span id="timerText">剩餘時間：02:00</span>
+    <span id="scoreText">得分：0</span>
+  </div>
+</header>
+
+<main>
+  <section class="input-area">
+    <h3>輸入區</h3>
+    <div id="inputGrid" class="inputGrid"></div>
+    <div class="dot"></div>
+    <button id="hintBtn" class="hint-btn" disabled>提示</button>
+  </section>
+
+  <section class="stage">
+    <canvas id="iso" width="600" height="440"></canvas>
+    <div class="dot"></div>
+  </section>
+
+  <section class="bottom">
+    <div class="ctrl">
+      <button id="startBtn2">開始</button>
+      <strong id="timerText2">剩餘時間：02:00</strong>
+      <strong id="scoreText2">得分：0</strong>
+      <div id="message"></div>
+    </div>
+
+    <div class="views">
+      <div class="viewBox"><div>上視圖</div><div id="topView" class="grid3"></div></div>
+      <div class="viewBox"><div>前視圖</div><div id="frontView" class="grid3"></div></div>
+      <div class="viewBox"><div>右視圖</div><div id="rightView" class="grid3"></div></div>
+    </div>
+  </section>
+</main>
+
+<div id="finalScore">
+  <div id="scoreDisplay"></div>
+  <small>點擊任意處關閉</small>
+</div>
+
+<script>
+// ====== 工具函式 ======
+(function(){
+'use strict';
+function shuffleArray(arr){ const a = arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function gridZeros(){ return Array.from({length:3},()=>Array(3).fill(0)); }
+function safeVal(v){ return (typeof v==='number' && isFinite(v)) ? v : 0; }
+
+// ====== 題庫設定（簡單至少一個2，中等不全為1或0，隨機後一輪內不重複） ======
+const fixedPuzzles = {
+  easy: shuffleArray([
+    [[0,1,0],[0,2,0],[0,0,0]], [[1,0,1],[0,2,0],[0,0,0]], [[0,1,0],[1,2,0],[0,0,0]], [[0,1,0],[1,1,2],[0,0,0]],
+    [[1,0,0],[0,2,0],[0,0,1]], [[0,1,0],[0,2,1],[0,0,0]], [[1,2,0],[0,1,0],[0,0,0]], [[0,0,1],[1,2,0],[0,0,0]],
+    [[0,1,0],[0,2,0],[0,1,0]], [[1,0,2],[0,0,0],[1,0,0]]
+  ]),
+  medium: shuffleArray([
+    [[1,1,0],[1,1,1],[0,0,0]], [[2,0,0],[1,1,0],[0,0,0]], [[1,1,1],[1,0,1],[0,0,0]], [[0,2,0],[1,1,0],[0,0,0]], [[1,0,1],[1,1,0],[0,0,0]],
+    [[0,1,0],[1,2,0],[0,0,1]], [[1,1,0],[0,2,1],[0,0,0]], [[1,1,1],[0,1,0],[0,1,0]], [[2,0,0],[1,1,0],[0,0,1]], [[0,2,1],[0,1,0],[0,0,0]],
+    [[1,1,0],[1,0,1],[0,1,0]], [[2,1,0],[0,1,0],[0,0,0]], [[1,1,1],[0,1,1],[0,0,0]], [[0,1,1],[1,2,0],[0,0,0]], [[1,1,1],[1,1,0],[0,0,0]],
+    [[0,2,0],[1,0,1],[0,0,1]], [[1,0,1],[0,2,0],[0,0,1]], [[1,1,1],[1,0,1],[0,1,0]], [[0,2,1],[1,1,0],[0,0,0]], [[1,1,0],[0,1,1],[0,1,0]]
+  ].filter(p=>p.flat().some(x=>x>1))),
+  hard: shuffleArray([
+    [[2,2,1],[1,2,1],[0,1,0]], [[3,1,1],[1,2,0],[0,0,1]], [[2,2,2],[1,1,0],[0,1,0]], [[1,2,1],[1,2,1],[0,1,0]], [[2,2,0],[1,1,1],[0,0,1]],
+    [[3,1,0],[2,2,0],[0,0,1]], [[1,2,2],[1,2,0],[0,0,0]], [[2,2,1],[2,1,1],[0,0,0]], [[3,1,1],[1,1,1],[0,0,0]], [[2,2,2],[1,1,1],[0,0,0]]
+  ])
+};
+
+// ====== 難度對照（8 題一輪） ======
+const patternMap = { // <-- 只宣告一次，避免重複定義
+  easy:  { easy: 4, medium: 4, hard: 0 },
+  normal:{ easy: 2, medium: 3, hard: 3 },
+  hard:  { easy: 0, medium: 4, hard: 4 },
+  hell:  { easy: 0, medium: 0, hard: 8 }
+};
+
+let diffMode='normal', patternOrder=[];
+let totalScore=0, currentRound=0, roundHint=0;
+let usedEasy=0, usedMed=0, usedHard=0;
+let gameRunning=false, endTime=0, nextHint=0;
+let target=gridZeros(), guess=gridZeros();
+
+// ====== 畫布與等角繪製 ======
+const SIZE=3, MAX_H=3;
+const tileW=90, tileH=52, cubeH=52;
+const canvas=document.getElementById('iso');
+const ctx=canvas.getContext('2d');
+let originX=canvas.width/2+40, originY=canvas.height/2+60; // 方塊固定位置
+function tileOrigin(c,r){ const x=originX+(c-r)*(tileW/2); const y=originY+(c+r)*(tileH/2); return {x,y}; }
+function rhombusPath(cx,cy,w,h){ const p=new Path2D(); p.moveTo(cx,cy-h/2); p.lineTo(cx+w/2,cy); p.lineTo(cx,cy+h/2); p.lineTo(cx-w/2,cy); p.closePath(); return p; }
+const baseTiles=[]; for(let r=0;r<SIZE;r++){ for(let c=0;c<SIZE;c++){ const {x,y}=tileOrigin(c,r); const path=rhombusPath(x,y,tileW,tileH); baseTiles.push({r,c,path,cx:x,cy:y}); }}
+function drawCube(cx,cy,level){
+  const z=cy-level*cubeH;
+  // 上紅、右下黃、左下藍
+  ctx.beginPath(); ctx.moveTo(cx,z-tileH/2); ctx.lineTo(cx+tileW/2,z); ctx.lineTo(cx,z+tileH/2); ctx.lineTo(cx-tileW/2,z); ctx.closePath(); ctx.fillStyle = '#ef4444'; ctx.fill(); ctx.strokeStyle = '#94a3b8'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+tileW/2,z); ctx.lineTo(cx+tileW/2,z+cubeH); ctx.lineTo(cx,z+tileH/2+cubeH); ctx.lineTo(cx,z+tileH/2); ctx.closePath(); ctx.fillStyle = '#facc15'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx-tileW/2,z); ctx.lineTo(cx-tileW/2,z+cubeH); ctx.lineTo(cx,z+tileH/2+cubeH); ctx.lineTo(cx,z+tileH/2); ctx.closePath(); ctx.fillStyle = '#3b82f6'; ctx.fill();
+}
+function drawGround(){ for(const t of baseTiles){ ctx.strokeStyle = '#cbd5e1'; ctx.stroke(t.path); } }
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height); drawGround();
+  const order=[]; for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) order.push([r,c]); order.sort((a,b)=>(a[0]+a[1])-(b[0]+b[1]));
+  for(const [r,c] of order){ const tile=baseTiles.find(t=>t.r===r&&t.c===c); const h=safeVal(guess[r]?.[c]); for(let k=1;k<=h;k++) drawCube(tile.cx,tile.cy,k); }
+}
+
+// ====== 三視圖計算與渲染 ======
+const topView=document.getElementById('topView');
+const frontView=document.getElementById('frontView');
+const rightView=document.getElementById('rightView');
+function initView(v){ v.innerHTML=''; for(let i=0;i<9;i++){ const d=document.createElement('div'); d.className='cell'; v.appendChild(d); } }
+[topView,frontView,rightView].forEach(initView);
+function computeViews(arr){
+  if(!Array.isArray(arr)||arr.length!==3) arr=gridZeros();
+  // top: 是否有方塊
+  const top=arr.map(row=>row.map(v=>v>0?1:0));
+  // front: 由下往上堆出最高高度
+  const front=Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+  for(let c=0;c<SIZE;c++){ let k=0; for(let r=0;r<SIZE;r++) k=Math.max(k,safeVal(arr[r]?.[c])); for(let i=0;i<k;i++) front[SIZE-1-i][c]=1; }
+  // right: 從右側觀察（螢幕右下方），每列取最大高度並填在對應列的最右起
+  const right=Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+  for(let r=0;r<SIZE;r++){ let k=0; for(let c=0;c<SIZE;c++) k=Math.max(k,safeVal(arr[r]?.[c])); const col=2-r; for(let i=0;i<k;i++) right[SIZE-1-i][col]=1; }
+  return {top,front,right};
+}
+function renderView(el,data,type){ const cells=el.querySelectorAll('.cell'); cells.forEach((cell,i)=>{ const r=Math.floor(i/3),c=i%3; cell.classList.remove('topFill','frontFill','rightFill'); if(data[r][c]===1){ if(type==='top')cell.classList.add('topFill'); if(type==='front')cell.classList.add('frontFill'); if(type==='right')cell.classList.add('rightFill'); }}); }
+function refreshViews(){ const {top,front,right}=computeViews(target); renderView(topView,top,'top'); renderView(frontView,front,'front'); renderView(rightView,right,'right'); }
+
+// ====== 輸入九宮格 ======
+const inputGrid=document.getElementById('inputGrid');
+function initInputGrid(){ inputGrid.innerHTML=''; for(let i=0;i<9;i++){ const r=Math.floor(i/3), c=i%3; const cell=document.createElement('div'); cell.className='inputCell'; cell.textContent=String(guess[r][c]); cell.addEventListener('click',()=>{ guess[r][c]=(safeVal(guess[r][c])+1)%4; cell.textContent=guess[r][c]; render(); checkSolved(); }); inputGrid.appendChild(cell); }}
+function updateInputGrid(){ const cells=inputGrid.querySelectorAll('.inputCell'); cells.forEach((cell,i)=>{ const r=Math.floor(i/3),c=i%3; cell.textContent=String(safeVal(guess[r]?.[c])); }); }
+initInputGrid();
+
+// ====== 判斷 / 提示 / 分數 ======
+function viewsMatch(){ const tg=computeViews(target), gs=computeViews(guess); const eq=(a,b)=>a.flat().every((v,i)=>v===b.flat()[i]); return eq(tg.top,gs.top)&&eq(tg.front,gs.front)&&eq(tg.right,gs.right); }
+function showMessage(t,c){ const el=document.getElementById('message'); el.textContent=t; el.style.color=c||'inherit'; }
+function flashSuccess(){ canvas.style.transform='scale(1.03)'; canvas.style.boxShadow='0 0 18px rgba(34,197,94,.9)'; setTimeout(()=>{canvas.style.transform='scale(1)'; canvas.style.boxShadow='none';},480); }
+function giveHint(){ const wrong=[]; for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(guess[r][c]!==target[r][c]) wrong.push([r,c]); if(wrong.length===0) return; const [r,c]=wrong[Math.floor(Math.random()*wrong.length)]; guess[r][c]=target[r][c]; roundHint++; render(); updateInputGrid(); checkSolved(); }
+function checkSolved(){ if(viewsMatch()){ const s=Math.max(10,100-20*roundHint); totalScore+=s; [document.getElementById('scoreText'),document.getElementById('scoreText2')].forEach(el=>el.textContent='得分：'+totalScore); flashSuccess(); showMessage('✅ 正確！自動進入下一題','var(--good)'); setTimeout(()=>nextQuestion(),800); return true; } return false; }
+
+// ====== 出題邏輯（依難度） ======
+function buildPatternOrder(mode){ const p=patternMap[mode]; let ord=[...Array(p.easy).fill('easy'),...Array(p.medium).fill('medium'),...Array(p.hard).fill('hard')]; return shuffleArray(ord); }
+function pickFromFixed(){ const type=patternOrder[currentRound-1]; if(type==='easy') return fixedPuzzles.easy[usedEasy++ % fixedPuzzles.easy.length]; if(type==='medium') return fixedPuzzles.medium[usedMed++ % fixedPuzzles.medium.length]; return fixedPuzzles.hard[usedHard++ % fixedPuzzles.hard.length]; }
+
+function nextQuestion(){ currentRound++; if(currentRound>8){ showFinalScore(); return; } target=pickFromFixed(); guess=gridZeros(); roundHint=0; nextHint=performance.now()+30000; document.getElementById('hintBtn').disabled=true; refreshViews(); render(); updateInputGrid(); showMessage(`第 ${currentRound} 題開始！`,'var(--accent)'); }
+
+// ====== 計時 / 結束 ======
+function showFinalScore(){ const overlay=document.getElementById('finalScore'); overlay.classList.add('visible'); document.getElementById('scoreDisplay').textContent=`最終得分：${totalScore}`; overlay.addEventListener('click',()=>{ overlay.classList.remove('visible'); resetGame(); },{once:true}); }
+let timerRAF=null;
+function updateTimer(){ if(!gameRunning){ cancelAnimationFrame(timerRAF); return; } const remain=Math.max(0,endTime-performance.now()); const mm=Math.floor(remain/60000), ss=Math.floor((remain%60000)/1000); const text=`剩餘時間：${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; [document.getElementById('timerText'),document.getElementById('timerText2')].forEach(el=>el.textContent=text); if(remain<=0){ gameRunning=false; showFinalScore(); return; } if(performance.now()>=nextHint){ document.getElementById('hintBtn').disabled=false; nextHint+=30000; } timerRAF=requestAnimationFrame(updateTimer); }
+
+function startGame(){ diffMode=document.getElementById('difficulty').value; patternOrder=buildPatternOrder(diffMode); totalScore=0; currentRound=0; usedEasy=usedMed=usedHard=0; gameRunning=true; endTime=performance.now()+120000; nextHint=performance.now()+30000; document.getElementById('hintBtn').disabled=true; [document.getElementById('scoreText'),document.getElementById('scoreText2')].forEach(el=>el.textContent='得分：0'); [document.getElementById('timerText'),document.getElementById('timerText2')].forEach(el=>el.textContent='剩餘時間：02:00'); nextQuestion(); updateTimer(); }
+function resetGame(){ gameRunning=false; totalScore=0; currentRound=0; roundHint=0; guess=gridZeros(); target=gridZeros(); [document.getElementById('scoreText'),document.getElementById('scoreText2')].forEach(el=>el.textContent='得分：0'); [document.getElementById('timerText'),document.getElementById('timerText2')].forEach(el=>el.textContent='剩餘時間：02:00'); render(); refreshViews(); updateInputGrid(); showMessage('遊戲已重置','var(--accent)'); }
+
+// ====== 綁定 ======
+document.getElementById('startBtn').addEventListener('click',()=>{ if(!gameRunning) startGame(); });
+document.getElementById('startBtn2').addEventListener('click',()=>{ if(!gameRunning) startGame(); });
+document.getElementById('hintBtn').addEventListener('click',giveHint);
+
+// ====== 初始渲染與測試 ======
+render(); refreshViews();
+(function runTests(){
+  // 測試 1：使用者範例
+  const sample1=[[2,3,1],[0,1,1],[0,0,1]]; const expTop1=[[1,1,1],[0,1,1],[0,0,1]]; const expFront1=[[0,1,0],[1,1,0],[1,1,1]]; const expRight1=[[0,0,1],[0,0,1],[1,1,1]]; const v1=computeViews(sample1);
+  console.assert(JSON.stringify(v1.top)===JSON.stringify(expTop1),'Top mismatch sample1',v1.top);
+  console.assert(JSON.stringify(v1.front)===JSON.stringify(expFront1),'Front mismatch sample1',v1.front);
+  console.assert(JSON.stringify(v1.right)===JSON.stringify(expRight1),'Right mismatch sample1',v1.right);
+  // 測試 2：全零
+  const z=gridZeros(); const vz=computeViews(z); console.assert(vz.top.flat().every(x=>x===0),'Zero top fails'); console.assert(vz.front.flat().every(x=>x===0),'Zero front fails'); console.assert(vz.right.flat().every(x=>x===0),'Zero right fails');
+  // 測試 3：中心高3
+  const c3=[[0,0,0],[0,3,0],[0,0,0]]; const v3=computeViews(c3); console.assert(JSON.stringify(v3.top)==='[[0,0,0],[0,1,0],[0,0,0]]','Top mismatch c3',v3.top); console.assert(JSON.stringify(v3.front)==='[[0,0,0],[0,0,0],[0,1,0]]','Front mismatch c3',v3.front); console.assert(JSON.stringify(v3.right)==='[[0,0,0],[0,0,0],[0,1,0]]','Right mismatch c3',v3.right);
+  // 測試 4：簡單題至少含 2
+  for(const p of fixedPuzzles.easy){ console.assert(p.flat().some(x=>x===2),'Easy puzzle must contain a 2',p); }
+  // 測試 5：各難度題型分配與長度
+  const expectCount=(mode)=>{ const pp=patternMap[mode]; const arr=[...Array(pp.easy).fill('easy'),...Array(pp.medium).fill('medium'),...Array(pp.hard).fill('hard')]; return {len:arr.length, e:pp.easy, m:pp.medium, h:pp.hard}; };
+  ['easy','normal','hard','hell'].forEach(mode=>{ const {len,e,m,h}=expectCount(mode); const ord=(()=>{const p=patternMap[mode]; return [...Array(p.easy).fill('easy'),...Array(p.medium).fill('medium'),...Array(p.hard).fill('hard')];})(); console.assert(len===8,`pattern length must be 8 for ${mode}`); console.assert(ord.filter(x=>x==='easy').length===e,`easy count wrong for ${mode}`); console.assert(ord.filter(x=>x==='medium').length===m,`medium count wrong for ${mode}`); console.assert(ord.filter(x=>x==='hard').length===h,`hard count wrong for ${mode}`); });
+})();
+})();
+</script>
+</body>
+</html>
