@@ -22,7 +22,7 @@
   .inputCell { width:60px; height:60px; background:#e2e8f0; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; cursor:pointer; user-select:none; }
   .hint-btn { margin-top:8px; padding:8px 14px; border-radius:10px; background:#e2e8f0; border:1px solid #94a3b8; cursor:pointer; }
   .hint-btn:disabled{ opacity:.5; cursor:not-allowed; }
-  .dot { width:10px; height:10px; background:#A0A; border-radius:50%; }
+  .dot { width:10px; height:10px; color:#A0A;font-weight: 900; border-radius:50%; }
 
   .stage { position:relative; width:640px; height:460px; display:flex; justify-content:center; align-items:center; }
   canvas { background:#f1f5f9; border:1px solid #cbd5e1; border-radius:12px; width:600px; height:440px; }
@@ -122,13 +122,13 @@
   <section class="input-area">
     <h3>輸入區</h3>
     <div id="inputGrid" class="inputGrid"></div>
-    <div class="dot"></div>
+    <div class="dot">&uarr;</div>
     <button id="hintBtn" class="hint-btn" disabled>提示</button>
   </section>
 
   <section class="stage">
     <canvas id="iso" width="600" height="440"></canvas>
-    <div class="dot"></div>
+    <div class="dot">&nearr;</div>
   </section>
 
   <section class="bottom">
@@ -239,7 +239,14 @@ let mode='normal', currentSet=[];
 let guess=zeros3(), target=zeros3();
 
 /* ========= 等角繪製（只畫 guess） ========= */
-const SIZE=3, tileW=90, tileH=52, cubeH=52;
+const SIZE=3;
+  
+const theta = 28 * Math.PI / 180; // 控制左右傾斜角
+const phi = 35 * Math.PI / 180;   // 控制俯視角
+const tileW = 100;
+const tileH = tileW * Math.sin(phi);
+const cubeH = tileW * Math.cos(phi) * 0.55;
+    
 const cvs=document.getElementById('iso'); const ctx=cvs.getContext('2d');
 let originX=cvs.width/2+40, originY=cvs.height/2+60;
 const tiles=[]; const rh=(cx,cy,w,h)=>{ const p=new Path2D(); p.moveTo(cx,cy-h/2); p.lineTo(cx+w/2,cy); p.lineTo(cx,cy+h/2); p.lineTo(cx-w/2,cy); p.closePath(); return p; };
