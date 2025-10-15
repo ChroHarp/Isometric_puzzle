@@ -11,7 +11,8 @@
   header { width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:var(--panel); box-shadow:0 2px 5px rgba(0,0,0,.08); position:sticky; top:0; z-index:10; }
   header h1 { margin:0; font-size:1.2rem; font-weight:800; }
   .top-controls { display:flex; gap:10px; align-items:center; }
-  select, button { font-size:1rem; }
+  select { font-size:1rem; }
+  button { background:#2563eb; color:#fff; border:none; border-radius:10px; padding:10px 18px; font-weight:800; cursor:pointer; }
   #scoreText, #timerText { font-size:1.2rem; font-weight:800; color:var(--accent); }
 
   /* 桌機：原本雙欄布局 */
@@ -103,6 +104,7 @@
 <body>
 <header>
   <h1>三視圖推理遊戲 · 九宮格立方體</h1>
+  <button id="modeChange" onclick="location.href='vsmode.html'">挑戰模式</button>
   <div class="top-controls">
     <label for="difficulty">難度：</label>
     <select id="difficulty">

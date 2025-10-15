@@ -73,7 +73,10 @@
 </head>
 <body>
 <header>
-  <h1>三視圖推理遊戲 · 雙人對戰（無提示）</h1>
+  <h1>三視圖推理遊戲 · 雙人對戰</h1>
+  <button id="modeChange" onclick="location.href='index.html'">挑戰模式</button>
+
+
   <div class="top-controls">
     <button id="startBtn">開始 / 重開</button>
     <span id="timerText">剩餘時間：02:00</span>
@@ -366,10 +369,11 @@ function showFinal(){
   overlay.classList.add('visible');
   document.body.classList.add('modal-open');
   overlay.addEventListener('click',()=>{
-    overlay.classList.remove('visible');
-    document.body.classList.remove('modal-open');
-    start();  // 點覆蓋層直接開新局
-  }, {once:true});
+  overlay.classList.remove('visible');
+  document.body.classList.remove('modal-open');
+  reset(); // 回到待機，不自動開始
+}, {once:true});
+
 }
 
 /* 綁定與初始化 */
