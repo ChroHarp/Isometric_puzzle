@@ -13,7 +13,7 @@
   .top-controls{ display:flex; gap:10px; align-items:center; }
   .top-controls button{ background:#2563eb; color:#fff; border:none; border-radius:10px; padding:10px 16px; font-weight:800; cursor:pointer; }
   #modeChange{ background:#ed2563; color:#fff; border:none; border-radius:10px; padding:10px 16px; font-weight:800; cursor:pointer; }
-  #timerText{ font-weight:800; color:var(--accent); }
+  .timerText{ font-weight:800; color:var(--accent); }
   main{ flex:1; display:flex; flex-direction:column; gap:12px; padding:12px 12px 24px; }
 
   /* 上半部主戰區：1P輸入 | 1P立體 | 2P立體 | 2P輸入 */
@@ -48,7 +48,11 @@
   .scoreBox{ background:#fff; border:1px solid #cbd5e1; border-radius:12px; padding:10px 14px; display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
   .scoreBox h3{ margin:0; font-size:1rem; }
   .scoreBox strong{ font-size:1.6rem; color:var(--accent); }
-
+  #p2ScoreBox {
+  align-items: flex-end;      /* 讓內部元素靠右 */
+  text-align: right;          /* 讓文字靠右 */
+}
+  
   .views{ background:#fff; border:1px solid #cbd5e1; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:8px; align-items:center; }
   .viewRow{ display:flex; gap:12px; }
   .viewBox{ display:flex; flex-direction:column; align-items:center; gap:6px; }
@@ -80,7 +84,7 @@
 
   <div class="top-controls">
     <button id="startBtn">開始 / 重開</button>
-    <span id="timerText">剩餘時間：02:00</span>
+    <span id ="timerTop" class="timerText">剩餘時間：02:00</span>
   </div>
 </header>
 
@@ -123,6 +127,7 @@
     <div class="scoreBox" id="p1ScoreBox">
       <h3>1P 分數</h3>
       <strong id="p1Score">0</strong>
+      <span class="timerText">剩餘時間：02:00</span>
       <div id="p1Msg"></div>
     </div>
 
@@ -131,6 +136,7 @@
     <div class="scoreBox" id="p2ScoreBox">
       <h3>2P 分數</h3>
       <strong id="p2Score">0</strong>
+      <span class="timerText">剩餘時間：02:00</span>
       <div id="p2Msg"></div>
     </div>
 
@@ -257,7 +263,7 @@ const p1GridEl=document.getElementById('p1Grid');
 const p2GridEl=document.getElementById('p2Grid');
 const p1ScoreEl=document.getElementById('p1Score');
 const p2ScoreEl=document.getElementById('p2Score');
-const timerEl=document.getElementById('timerText');
+const timerEls = document.querySelectorAll('.timerText');
 
 const r1=makeRenderer(document.getElementById('p1Canvas'));
 const r2=makeRenderer(document.getElementById('p2Canvas'));
@@ -333,11 +339,15 @@ function updateScores(){
 let raf=null;
 function tick(){
   if(!running){ cancelAnimationFrame(raf); return; }
-  const remain=Math.max(0, endAt - performance.now());
-  const mm=Math.floor(remain/60000), ss=Math.floor((remain%60000)/1000);
-  timerEl.textContent = `剩餘時間：${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  const remain = Math.max(0, endAt - performance.now());
+  const mm = Math.floor(remain/60000), ss = Math.floor((remain%60000)/1000);
+  const text = `剩餘時間：${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+
+  // 一次更新所有倒數顯示
+  timerEls.forEach(el => el.textContent = text);
+
   if(remain<=0){ running=false; showFinal(); return; }
-  raf=requestAnimationFrame(tick);
+  raf = requestAnimationFrame(tick);
 }
 
 /* 開始 / 重置 */
@@ -345,6 +355,7 @@ function start(){
   if(running){ reset(); }  // 遊戲中按開始 → 直接重開
   players[0].score=0; players[1].score=0; updateScores();
   endAt=performance.now()+DURATION; running=true;
+  timerEls.forEach(el => el.textContent = '剩餘時間：02:00');
   nextQuestion();
   tick();
 }
@@ -355,7 +366,7 @@ function reset(){
   target=zeros3();
   r1.render(players[0].guess); r2.render(players[1].guess);
   refreshViews(); syncInputs();
-  timerEl.textContent='剩餘時間：02:00';
+  timerEls.forEach(el => el.textContent = '剩餘時間：02:00');
 }
 
 /* 結算覆蓋層 */
