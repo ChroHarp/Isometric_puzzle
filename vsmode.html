@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>三視圖推理遊戲 · 雙人對戰（無提示）</title>
+<style>
+  :root { --bg:#f9fafb; --panel:#ffffff; --text:#0f172a; --accent:#2563eb; --good:#16a34a; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:"Noto Sans TC",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; min-height:100vh; display:flex; flex-direction:column; }
+  header{ position:sticky; top:0; z-index:10; background:var(--panel); box-shadow:0 2px 5px rgba(0,0,0,.08); padding:10px 16px; display:flex; align-items:center; justify-content:space-between; }
+  header h1{ margin:0; font-size:1.1rem; font-weight:800; }
+  .top-controls{ display:flex; gap:10px; align-items:center; }
+  .top-controls button{ background:#2563eb; color:#fff; border:none; border-radius:10px; padding:10px 16px; font-weight:800; cursor:pointer; }
+  #timerText{ font-weight:800; color:var(--accent); }
+  main{ flex:1; display:flex; flex-direction:column; gap:12px; padding:12px 12px 24px; }
+
+  /* 上半部主戰區：1P輸入 | 1P立體 | 2P立體 | 2P輸入 */
+  .game-area{
+    display:grid;
+    grid-template-columns: 280px 1fr 1fr 280px;
+    grid-template-rows: 480px;
+    gap:12px;
+    align-items:stretch;
+  }
+
+  .input-area{ background:#fff; border:1px solid #cbd5e1; border-radius:12px; padding:10px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .input-area h3{ margin:4px 0; font-size:1rem; }
+  .inputGrid{ display:grid; grid-template-columns:repeat(3,60px); gap:6px; }
+  .inputCell{ width:60px; height:60px; background:#e2e8f0; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; cursor:pointer; user-select:none; }
+  .inputCell:active{ transform:scale(.98); }
+  .dot { width:10px; height:10px; color:#A0A;font-weight: 900; border-radius:50%; }
+
+
+  .stage{ background:#fff; border:1px solid #cbd5e1; border-radius:12px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  canvas{ background:#f1f5f9; border:1px solid #cbd5e1; border-radius:12px; width:600px; height:440px; }
+ .stage .dot { position:absolute; left:40%; bottom:22%; }
+    
+  /* 下半部資訊區：1P分數 | 1P三視圖 | 2P分數 | 2P三視圖 */
+  .info-area{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap:12px;
+    align-items:start;
+  }
+
+  .scoreBox{ background:#fff; border:1px solid #cbd5e1; border-radius:12px; padding:10px 14px; display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+  .scoreBox h3{ margin:0; font-size:1rem; }
+  .scoreBox strong{ font-size:1.6rem; color:var(--accent); }
+
+  .views{ background:#fff; border:1px solid #cbd5e1; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:8px; align-items:center; }
+  .viewRow{ display:flex; gap:12px; }
+  .viewBox{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .viewBox>div:first-child{ font-weight:800; }
+  .grid3{ display:grid; grid-template-columns:repeat(3,40px); grid-template-rows:repeat(3,40px); gap:2px; }
+  .cell{ background:#fff; border:1px solid #cbd5e1; width:40px; height:40px; border-radius:6px; }
+  .topFill{ background:#ef4444; }     /* 上紅 */
+  .frontFill{ background:#3b82f6; }   /* 左下藍（前） */
+  .rightFill{ background:#facc15; }   /* 右下黃（右） */
+
+  /* 結算覆蓋層（最上層 + 攔截事件） */
+  #finalScore{
+    position:fixed; inset:0; background:rgba(255,255,255,0.96);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:10000; pointer-events:none; opacity:0; transition:opacity .18s ease;
+  }
+  #finalScore.visible{ pointer-events:auto; opacity:1; }
+  #scoreDisplay{ font-size:2.2rem; font-weight:900; color:var(--accent); margin-bottom:10px; text-align:center; }
+  #winnerText{ font-size:1.4rem; font-weight:800; color:#111827; }
+
+  body.modal-open header, body.modal-open main{ pointer-events:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>三視圖推理遊戲 · 雙人對戰（無提示）</h1>
+  <div class="top-controls">
+    <button id="startBtn">開始 / 重開</button>
+    <span id="timerText">剩餘時間：02:00</span>
+  </div>
+</header>
+
+<main>
+  <!-- 上排 -->
+  <section class="game-area">
+    <div class="input-area" id="p1Input">
+      <h3>1P 輸入</h3>
+      <div id="p1Grid" class="inputGrid"></div>
+      <div class="dot">&uarr;</div>
+    </div>
+
+    <div class="stage">
+        <canvas id="p1Canvas" width="600" height="440"></canvas>
+        <div class="dot">&nearr;</div>
+      </div>
+    <div class="stage">
+        <canvas id="p2Canvas" width="600" height="440"></canvas>
+        <div class="dot">&nearr;</div>
+      </div>
+
+    <div class="input-area" id="p2Input">
+      <h3>2P 輸入</h3>
+      <div id="p2Grid" class="inputGrid"></div>
+      <div class="dot">&uarr;</div>
+    </div>
+  </section>
+
+  <!-- 下排 -->
+  <section class="info-area">
+    
+    <div class="views" id="p1Views">
+      <div class="viewRow">
+        <div class="viewBox"><div>上視圖</div><div id="topView" class="grid3"></div></div>
+        <div class="viewBox"><div>前視圖</div><div id="frontView" class="grid3"></div></div>
+        <div class="viewBox"><div>右視圖</div><div id="rightView" class="grid3"></div></div>
+      </div>
+    </div>  
+      
+    <div class="scoreBox" id="p1ScoreBox">
+      <h3>1P 分數</h3>
+      <strong id="p1Score">0</strong>
+      <div id="p1Msg"></div>
+    </div>
+
+
+
+    <div class="scoreBox" id="p2ScoreBox">
+      <h3>2P 分數</h3>
+      <strong id="p2Score">0</strong>
+      <div id="p2Msg"></div>
+    </div>
+
+    <div class="views" id="p2Views">
+      <div class="viewRow">
+        <div class="viewBox"><div>上視圖</div><div id="topView2" class="grid3"></div></div>
+        <div class="viewBox"><div>前視圖</div><div id="frontView2" class="grid3"></div></div>
+        <div class="viewBox"><div>右視圖</div><div id="rightView2" class="grid3"></div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 結算 -->
+<div id="finalScore">
+  <div id="scoreDisplay"></div>
+  <div id="winnerText">點擊任意處重開新局</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ========== 公用工具 ========== */
+const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
+const zeros3=()=>Array.from({length:3},()=>Array(3).fill(0));
+const isNum=v=>typeof v==='number'&&isFinite(v);
+const safe=v=>isNum(v)?v:0;
+function norm3x3(m){ const o=[[0,0,0],[0,0,0],[0,0,0]]; if(!Array.isArray(m)) return o; for(let r=0;r<3;r++){ const row=Array.isArray(m[r])?m[r]:[0,0,0]; o[r][0]=safe(row[0]); o[r][1]=safe(row[1]); o[r][2]=safe(row[2]); } return o; }
+function writeCell(m,r,c,val){ const g=norm3x3(m); g[clamp(r,0,2)][clamp(c,0,2)]=safe(val); return g; }
+
+/* ========== 題目生成（不允許全 0，也不允許所有元素都 ≤ 1） ========== */
+function genPuzzle(){
+  while(true){
+    const a=zeros3().map(row=>row.map(()=>Math.floor(Math.random()*4))); // 0~3
+    const f=a.flat();
+    const allZero = f.every(x=>x===0);
+    const allLe1  = f.every(x=>x<=1);
+    if(!allZero && !allLe1) return a;
+  }
+}
+
+/* ========== 視圖（上/前/右） ========== */
+function viewsOf(a){ a=norm3x3(a);
+  const top=a.map(row=>row.map(v=>v>0?1:0));
+  const front=Array.from({length:3},()=>Array(3).fill(0));
+  for(let c=0;c<3;c++){ let k=0; for(let r=0;r<3;r++) k=Math.max(k,safe(a[r][c])); k=Math.min(k,3); for(let i=0;i<k;i++) front[2-i][c]=1; }
+  const right=Array.from({length:3},()=>Array(3).fill(0));
+  for(let r=0;r<3;r++){ let k=0; for(let c=0;c<3;c++) k=Math.max(k,safe(a[r][c])); k=Math.min(k,3); const col=2-r; for(let i=0;i<k;i++) right[2-i][col]=1; }
+  return {top,front,right};
+}
+function paintView(el,data,type){
+  const cells=el.querySelectorAll('.cell');
+  cells.forEach((cell,i)=>{
+    const r=Math.floor(i/3), c=i%3;
+    cell.classList.remove('topFill','frontFill','rightFill');
+    if(data[r][c]===1){
+      if(type==='top') cell.classList.add('topFill');
+      if(type==='front') cell.classList.add('frontFill');
+      if(type==='right') cell.classList.add('rightFill');
+    }
+  });
+}
+function initViewDom(container){
+  container.innerHTML='';
+  for(let i=0;i<9;i++){
+    const d=document.createElement('div'); d.className='cell';
+    container.appendChild(d);
+  }
+}
+
+/* ========== 等角繪製（2D 模擬） ========== */
+const SIZE=3;
+/* 你可在此微調比例，降低對稱感與遮擋 */
+const tileW=100, tileH=35, cubeH=50;  // ← 建議比原本更不對稱
+function makeRenderer(canvas){
+  const ctx=canvas.getContext('2d');
+  let originX=canvas.width/2+40, originY=canvas.height/2+60;
+  const rh=(cx,cy,w,h)=>{ const p=new Path2D(); p.moveTo(cx,cy-h/2); p.lineTo(cx+w/2,cy); p.lineTo(cx,cy+h/2); p.lineTo(cx-w/2,cy); p.closePath(); return p; };
+  const ori=(c,r)=>({ x:originX+(c-r)*(tileW/2), y:originY+(c+r)*(tileH/2) });
+  const tiles=[]; for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){ const o=ori(c,r); tiles.push({r,c,cx:o.x,cy:o.y,path:rh(o.x,o.y,tileW,tileH)}); }
+
+  function drawCube(cx,cy,l){
+    const z=cy-l*cubeH;
+    // 上（紅）
+    ctx.beginPath(); ctx.moveTo(cx,z-tileH/2); ctx.lineTo(cx+tileW/2,z); ctx.lineTo(cx,z+tileH/2); ctx.lineTo(cx-tileW/2,z); ctx.closePath();
+    ctx.fillStyle='#ef4444'; ctx.fill(); ctx.strokeStyle='#94a3b8'; ctx.stroke();
+    // 右（黃）
+    ctx.beginPath(); ctx.moveTo(cx+tileW/2,z); ctx.lineTo(cx+tileW/2,z+cubeH); ctx.lineTo(cx,z+tileH/2+cubeH); ctx.lineTo(cx,z+tileH/2); ctx.closePath();
+    ctx.fillStyle='#facc15'; ctx.fill();
+    // 左（藍）
+    ctx.beginPath(); ctx.moveTo(cx-tileW/2,z); ctx.lineTo(cx-tileW/2,z+cubeH); ctx.lineTo(cx,z+tileH/2+cubeH); ctx.lineTo(cx,z+tileH/2); ctx.closePath();
+    ctx.fillStyle='#3b82f6'; ctx.fill();
+  }
+  function drawGround(){ ctx.strokeStyle='#cbd5e1'; for(const t of tiles) ctx.stroke(t.path); }
+  function render(grid){
+    ctx.clearRect(0,0,canvas.width,canvas.height); drawGround();
+    const g=norm3x3(grid);
+    const order=[]; for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) order.push([r,c]); order.sort((a,b)=>(a[0]+a[1])-(b[0]+b[1]));
+    for(const [r,c] of order){
+      const t=tiles.find(x=>x.r===r&&x.c===c);
+      const h=Math.min(safe(g[r][c]),3); // 視覺層數上限 3
+      for(let k=1;k<=h;k++) drawCube(t.cx,t.cy,k);
+    }
+  }
+  function flash(){ canvas.style.transform='scale(1.03)'; canvas.style.boxShadow='0 0 16px rgba(34,197,94,.9)'; setTimeout(()=>{canvas.style.transform=''; canvas.style.boxShadow='';},450); }
+  return { render, flash };
+}
+
+/* ========== 狀態 ==========
+   兩位玩家共享同題目，各自有 guess 與分數
+================================ */
+const players=[
+  { name:'1P', guess:zeros3(), score:0 },
+  { name:'2P', guess:zeros3(), score:0 }
+];
+
+let target=zeros3();
+let running=false, endAt=0;
+const DURATION=120000; // 2 minutes
+
+/* DOM 綁定 */
+const p1GridEl=document.getElementById('p1Grid');
+const p2GridEl=document.getElementById('p2Grid');
+const p1ScoreEl=document.getElementById('p1Score');
+const p2ScoreEl=document.getElementById('p2Score');
+const timerEl=document.getElementById('timerText');
+
+const r1=makeRenderer(document.getElementById('p1Canvas'));
+const r2=makeRenderer(document.getElementById('p2Canvas'));
+
+/* 三視圖 DOM 初始化（左右兩邊各顯示一份相同的題目三視圖） */
+const topV = document.getElementById('topView');
+const frontV = document.getElementById('frontView');
+const rightV = document.getElementById('rightView');
+const topV2 = document.getElementById('topView2');
+const frontV2 = document.getElementById('frontView2');
+const rightV2 = document.getElementById('rightView2');
+[topV,frontV,rightV,topV2,frontV2,rightV2].forEach(initViewDom);
+
+/* 輸入九宮格（各自獨立） */
+function rebuildInput(gridEl, playerIndex){
+  const get = ()=>norm3x3(players[playerIndex].guess);
+  gridEl.innerHTML='';
+  for(let i=0;i<9;i++){
+    const r=Math.floor(i/3), c=i%3;
+    const cell=document.createElement('div'); cell.className='inputCell';
+    cell.textContent=String(get()[r][c]);
+    cell.addEventListener('click',()=>{
+      const cur=get()[r][c];
+      players[playerIndex].guess = writeCell(players[playerIndex].guess, r, c, (safe(cur)+1)%4);
+      cell.textContent=String(get()[r][c]);
+      if(playerIndex===0) r1.render(players[0].guess); else r2.render(players[1].guess);
+      checkSolved(playerIndex);
+    });
+    gridEl.appendChild(cell);
+  }
+}
+function syncInputs(){
+  const g1=norm3x3(players[0].guess), g2=norm3x3(players[1].guess);
+  p1GridEl.querySelectorAll('.inputCell').forEach((el,i)=>{ const r=Math.floor(i/3),c=i%3; el.textContent=String(g1[r][c]); });
+  p2GridEl.querySelectorAll('.inputCell').forEach((el,i)=>{ const r=Math.floor(i/3),c=i%3; el.textContent=String(g2[r][c]); });
+}
+
+/* 題目 / 三視圖 */
+function refreshViews(){
+  const {top,front,right}=viewsOf(target);
+  paintView(topV,top,'top'); paintView(frontV,front,'front'); paintView(rightV,right,'right');
+  paintView(topV2,top,'top'); paintView(frontV2,front,'front'); paintView(rightV2,'right'==='right' ? right : right,'right');
+}
+
+/* 檢查答案（先搶到者得分 + 換題） */
+function viewsMatch(a,b){ const A=viewsOf(a), B=viewsOf(b); const eq=(x,y)=>x.flat().every((v,i)=>v===y.flat()[i]); return eq(A.top,B.top)&&eq(A.front,B.front)&&eq(A.right,B.right); }
+function checkSolved(idx){
+  if(!running) return;
+  if(viewsMatch(players[idx].guess, target)){
+    players[idx].score += 100;
+    (idx===0? r1 : r2).flash();
+    updateScores();
+    nextQuestion();
+  }
+}
+
+/* 換題 */
+function nextQuestion(){
+  target = genPuzzle();
+  players[0].guess = zeros3();
+  players[1].guess = zeros3();
+  r1.render(players[0].guess);
+  r2.render(players[1].guess);
+  syncInputs();
+  refreshViews();
+}
+
+/* 計分/時間/結算 */
+function updateScores(){
+  p1ScoreEl.textContent = String(players[0].score);
+  p2ScoreEl.textContent = String(players[1].score);
+}
+let raf=null;
+function tick(){
+  if(!running){ cancelAnimationFrame(raf); return; }
+  const remain=Math.max(0, endAt - performance.now());
+  const mm=Math.floor(remain/60000), ss=Math.floor((remain%60000)/1000);
+  timerEl.textContent = `剩餘時間：${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  if(remain<=0){ running=false; showFinal(); return; }
+  raf=requestAnimationFrame(tick);
+}
+
+/* 開始 / 重置 */
+function start(){
+  if(running){ reset(); }  // 遊戲中按開始 → 直接重開
+  players[0].score=0; players[1].score=0; updateScores();
+  endAt=performance.now()+DURATION; running=true;
+  nextQuestion();
+  tick();
+}
+function reset(){
+  running=false;
+  players[0].score=0; players[1].score=0; updateScores();
+  players[0].guess=zeros3(); players[1].guess=zeros3();
+  target=zeros3();
+  r1.render(players[0].guess); r2.render(players[1].guess);
+  refreshViews(); syncInputs();
+  timerEl.textContent='剩餘時間：02:00';
+}
+
+/* 結算覆蓋層 */
+const overlay=document.getElementById('finalScore');
+function showFinal(){
+  const s1=players[0].score, s2=players[1].score;
+  let win='平手！';
+  if(s1>s2) win='🏆 1P 勝利！';
+  else if(s2>s1) win='🏆 2P 勝利！';
+  document.getElementById('scoreDisplay').innerHTML = `1P：${s1}　|　2P：${s2}`;
+  document.getElementById('winnerText').innerHTML = `${win}<br>（點擊任意處重開）`;
+  overlay.classList.add('visible');
+  document.body.classList.add('modal-open');
+  overlay.addEventListener('click',()=>{
+    overlay.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+    start();  // 點覆蓋層直接開新局
+  }, {once:true});
+}
+
+/* 綁定與初始化 */
+document.getElementById('startBtn').addEventListener('click', start);
+rebuildInput(p1GridEl,0);
+rebuildInput(p2GridEl,1);
+r1.render(players[0].guess);
+r2.render(players[1].guess);
+refreshViews();
+
+/* 基本測試（不影響遊戲） */
+(function tests(){
+  const s=[[2,3,1],[0,1,1],[0,0,1]];
+  const eT=[[1,1,1],[0,1,1],[0,0,1]];
+  const eF=[[0,1,0],[1,1,0],[1,1,1]];
+  const eR=[[0,0,1],[0,0,1],[1,1,1]];
+  const v=viewsOf(s);
+  console.assert(JSON.stringify(v.top)===JSON.stringify(eT),'Top fail',v.top);
+  console.assert(JSON.stringify(v.front)===JSON.stringify(eF),'Front fail',v.front);
+  console.assert(JSON.stringify(v.right)===JSON.stringify(eR),'Right fail',v.right);
+})();
+})();
+</script>
+</body>
+</html>
